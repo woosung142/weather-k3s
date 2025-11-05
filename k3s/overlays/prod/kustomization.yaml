@@ -4,4 +4,4 @@ resources:
   - ../../base
 images:
   - name: ghcr.io/woosung142/weather-k3s/weatherapi
-    newTag: main-3e13f17
+    newTag: main-b66a92b
