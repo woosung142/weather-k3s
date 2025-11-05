@@ -21,9 +21,9 @@ jobs:
         with:
           filters: |
             weatherapi:
-              - 'weatherapi/**'
+              - 'app/weatherapi/**'
             cctvapi:
-              - 'cctvapi/**'
+              - 'app/cctvapi/**'
 
   # Job 2: 변경된 서비스만 빌드, 푸시, Kustomize 업데이트
   build-push-update:
@@ -62,7 +62,7 @@ jobs:
         with:
           context: .
           # 6. 각 서비스의 Dockerfile 경로를 'matrix.service'로 동적 지정
-          file: ./${{ matrix.service }}/Dockerfile
+          file: ./app/${{ matrix.service }}/Dockerfile
           push: true
           tags: |
             # 7. 'weather-k3s' 리포지토리의 'weatherapi' 같은 이름으로 태그 지정
