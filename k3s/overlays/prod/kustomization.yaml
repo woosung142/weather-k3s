@@ -6,4 +6,4 @@ resources:
   - ingress.yaml
 images:
   - name: ghcr.io/woosung142/weather-k3s/weatherapi
-    newTag: main-3e31484
+    newTag: main-3e13f17
