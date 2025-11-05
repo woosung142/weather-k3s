@@ -1,0 +1,34 @@
+.env
+*.env
+
+venv/
+.venv/
+env/
+/env/
+/venv/
+/.venv/
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+.vscode/
+
+.idea/
+
+
+.DS_Store
+
+# Windows
+Thumbs.db
+
+
+.pytest_cache/
+
+# Tox
+.tox/
+
+# 빌드 및 배포 폴더
+build/
+dist/
+*.egg-info/

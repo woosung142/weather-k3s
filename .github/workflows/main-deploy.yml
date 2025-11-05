@@ -1,0 +1,101 @@
+name: Build, Push and Update Manifests (Main Only)
+
+on:
+  push:
+    branches:
+      - ci-test  # 1. 요구사항: 오직 'main' 브랜치에 푸시될 때만 실행
+
+jobs:
+  # Job 1: 어떤 서비스의 코드가 변경되었는지 감지
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      service_changes: ${{ steps.filter.outputs.changes }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect changed services
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            weatherapi:
+              - 'weatherapi/**'
+            cctvapi:
+              - 'cctvapi/**'
+
+  # Job 2: 변경된 서비스만 빌드, 푸시, Kustomize 업데이트
+  build-push-update:
+    needs: changes
+    # 3. 변경된 서비스가 있을 때만 이 Job을 실행
+    if: ${{ needs.changes.outputs.service_changes != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # 4. 'changes' Job의 결과(JSON 배열)를 'service' 변수로 주입
+        service: ${{ fromJson(needs.changes.outputs.service_changes) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # 5. Kustomize 파일을 수정 후 다시 push해야 하므로 PAT 토큰 사용
+          token: ${{ secrets.WOOSUNG142 }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.WOOSUNG142 }} # Docker 로그인에도 동일한 PAT 사용
+
+      - name: Get short SHA
+        run: echo "SHORT_SHA=$(echo '${{ github.sha }}' | cut -c1-7)" >> $GITHUB_ENV
+
+      - name: Build and Push image to GHCR
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          # 6. 각 서비스의 Dockerfile 경로를 'matrix.service'로 동적 지정
+          file: ./${{ matrix.service }}/Dockerfile
+          push: true
+          tags: |
+            # 7. 'weather-k3s' 리포지토리의 'weatherapi' 같은 이름으로 태그 지정
+            ghcr.io/${{ github.repository_owner }}/weather-k3s/${{ matrix.service }}:${{ github.ref_name }}
+            ghcr.io/${{ github.repository_owner }}/weather-k3s/${{ matrix.service }}:${{ github.ref_name }}-${{ env.SHORT_SHA }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Update Kustomize Manifest
+        # 8. 'main' 브랜치일 때만 Kustomize 파일을 수정 (develop는 이 Job 자체가 실행 안 됨)
+        if: github.ref_name == 'ci-test'
+        run: |
+          # 9. 푸시할 고유 태그 (예: main-a1b2c3d)
+          export IMAGE_TAG="${{ github.ref_name }}-${{ env.SHORT_SHA }}"
+
+          # 10. 'main' 브랜치이므로 'prod' 오버레이 경로를 사용
+          export KUSTOMIZE_PATH="k3s/overlays/dev/kustomization.yaml"
+
+          echo "Updating ${KUSTOMIZE_PATH} for ${{ matrix.service }} with tag ${IMAGE_TAG}"
+
+          # Git 봇 설정
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          
+          # 'yq' 설치 (kustomize edit 보다 강력함)
+          wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          chmod a+x /usr/local/bin/yq
+
+          # 11. yq를 사용해 'images:' 블록의 'newTag'를 고유 태그로 덮어쓰기
+          # 'k-animator' 대신 'weather-k3s' 경로를 찾도록 수정
+          yq e '(.images[] | select(.name | test("ghcr.io/${{ github.repository_owner }}/weather-k3s/${{ matrix.service }}")) | .newTag) = strenv(IMAGE_TAG)' -i ${KUSTOMIZE_PATH}
+
+          # 12. [skip ci]를 포함하여 커밋 (무한 루프 방지)
+          git add ${KUSTOMIZE_PATH}
+          git commit -m "ci: Update ${{ matrix.service }} image to tag ${IMAGE_TAG} [skip ci]" || echo "No changes to commit"
+          git push
