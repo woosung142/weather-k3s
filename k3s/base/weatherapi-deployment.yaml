@@ -15,9 +15,7 @@ spec:
       containers:
         - name: weatherapi
           image: ghcr.io/woosung142/weather-k3s/weatherapi:main
-          imagePullPolicy: Always
           ports:
             - containerPort: 8000
-
       imagePullSecrets:
         - name: ghcr-secret
