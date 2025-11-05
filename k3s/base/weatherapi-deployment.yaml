@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: weatherapi-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: weatherapi
+  template:
+    metadata:
+      labels:
+        app: weatherapi
+    spec:
+      containers:
+        - name: weatherapi
+          image: ghcr.io/woosung142/weather-k3s/weatherapi:main
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+
+      imagePullSecrets:
+        - name: ghcr-secret

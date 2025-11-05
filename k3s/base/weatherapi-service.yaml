@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: weatherapi-service
+spec:
+  selector:
+    app: weatherapi
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
