@@ -11,7 +11,7 @@ spec:
   source:
     repoURL: https://github.com/woosung142/weather-k3s.git
     targetRevision: main
-    path: k8s/overlays/prod 
+    path: k3s/overlays/prod 
   
   destination:
     server: https://kubernetes.default.svc
