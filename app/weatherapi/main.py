@@ -21,4 +21,4 @@ app.include_router(
 
 @app.get("/", tags=["Root"])
 def read_root():
-    return {"message": "서버가 실행 중입니다. /docs 로 이동하세요."}# CI 테스트용 주석
+    return {"message": "서버가 실행 중입니다. /docs 로 이동하세요."}# Re-trigger build for arm64
