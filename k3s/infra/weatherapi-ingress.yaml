@@ -6,7 +6,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: weapi.shop
+    - host: www.weapi.shop
       http:
         paths:
           - path: /api/weather
