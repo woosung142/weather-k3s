@@ -18,9 +18,9 @@ spec:
         image: cloudflare/cloudflared:latest
         args:
         - "tunnel"
+        - "run"
         - "--token"
         - "$(TUNNEL_TOKEN)"
-        - "run"
 
         env:
         - name: TUNNEL_TOKEN
