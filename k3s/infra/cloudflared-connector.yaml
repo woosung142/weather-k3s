@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared-connector
+
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloudflared-connector
+  template:
+    metadata:
+      labels:
+        app: cloudflared-connector
+    spec:
+      containers:
+      - name: cloudflared
+        image: cloudflare/cloudflared:latest
+        args:
+        - "tunnel"
+        - "--token"
+        - "$(TUNNEL_TOKEN)"
+        - "run"
+
+        env:
+        - name: TUNNEL_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: tunnel-token 
+              key: token
