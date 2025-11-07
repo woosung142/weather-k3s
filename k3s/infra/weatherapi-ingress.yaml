@@ -17,3 +17,10 @@ spec:
                 name: weatherapi-service
                 port:
                   number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: weatherapi-service
+                port:
+                  number: 80
