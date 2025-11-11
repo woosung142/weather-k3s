@@ -5,7 +5,7 @@ import os
 env_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(dotenv_path=env_path)
 
-from api import router as weather_router
+from .api import router as weather_router
 
 app = FastAPI(
     title="날씨 앱 API",

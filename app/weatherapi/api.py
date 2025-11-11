@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
-from service import get_current_data
+from .service import get_current_data
 
 router = APIRouter()
 

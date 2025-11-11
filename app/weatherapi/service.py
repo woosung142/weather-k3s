@@ -1,10 +1,17 @@
 import os
+import logging
 import httpx
 from fastapi import HTTPException
 from datetime import datetime, timedelta
+from shared.redis.client import redis
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 KMA_API_URL = "http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst"
 KMA_SERVICE_KEY = os.getenv("KMA_SERVICE_KEY")
+
+CASHE_EXPIRE = 300
 
 # API 요청 파라미터
 def get_params(nx: int, ny: int):
@@ -27,6 +34,13 @@ def get_params(nx: int, ny: int):
     return params
 
 async def get_current_data(nx: int, ny: int):
+    cache_key = f"weather:{nx}:{ny}"
+    cached = redis.get(cache_key)
+    if cached:
+        logging.info("캐시된 날씨 데이터 사용")
+        return eval(cached)
+    logging.info("기상청 API에서 날씨 데이터 조회")
+
     params = get_params(nx, ny)
     try:
         async with httpx.AsyncClient() as client:
@@ -39,6 +53,8 @@ async def get_current_data(nx: int, ny: int):
             weather_data = response.json()
 
             parsed = parse_items(weather_data)
+
+            redis.set(cache_key, str(parsed), ex=CASHE_EXPIRE)
             
             return parsed
 
