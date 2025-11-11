@@ -3,13 +3,21 @@ kind: Ingress
 metadata:
   name: weatherapi-ingress
   namespace: default
+  annotations:
+    kubernetes.io/ingress.class: "traefik"  
 spec:
-  ingressClassName: traefik
   rules:
     - host: www.weapi.shop
       http:
         paths:
           - path: /api/weather
+            pathType: Prefix
+            backend:
+              service:
+                name: weatherapi-service
+                port:
+                  number: 80
+          - path: /
             pathType: Prefix
             backend:
               service:
