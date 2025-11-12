@@ -12,6 +12,9 @@ KMA_API_URL = "http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltra
 KMA_SERVICE_KEY = os.getenv("KMA_SERVICE_KEY")
 
 CASHE_EXPIRE = 300
+#------------------------------------------------------
+# 초단기실황조회(현재날씨)
+#------------------------------------------------------
 
 # API 요청 파라미터
 def get_params(nx: int, ny: int):
@@ -32,6 +35,7 @@ def get_params(nx: int, ny: int):
         "ny": ny,
     }
     return params
+
 
 async def get_current_data(nx: int, ny: int):
     cache_key = f"weather:{nx}:{ny}"
@@ -66,6 +70,7 @@ async def get_current_data(nx: int, ny: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"서버 내부 오류: {e}")
 
+# 데이터 파싱
 def parse_items(data:dict):
     try:
         items = data["response"]["body"]["items"]["item"]
