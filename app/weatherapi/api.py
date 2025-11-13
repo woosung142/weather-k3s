@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
-from .service import get_current_data
+from .service import get_current_data, get_forecast_data
 
 router = APIRouter()
 
@@ -9,6 +9,16 @@ async def get_current_weather(
     ny: int = Query(127, description="예보지점 Y 좌표")
 ):
     parsed_data = await get_current_data(nx, ny)
+    return {
+        "위치좌표": {"nx": nx, "ny": ny},
+        "날씨": parsed_data
+    }
+@router.get("/forecast", summary="단기 예보 조회", tags=["날씨"])
+async def get_forecast_weather(
+    nx: int = Query(60, description="예보지점 X 좌표"),
+    ny: int = Query(127, description="예보지점 Y 좌표")
+):
+    parsed_data = await get_forecast_data(nx, ny)
     return {
         "위치좌표": {"nx": nx, "ny": ny},
         "날씨": parsed_data
