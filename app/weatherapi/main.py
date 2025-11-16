@@ -5,7 +5,7 @@ import os
 env_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(dotenv_path=env_path)
 
-from api import router as weather_router
+from .api import router as weather_router
 
 app = FastAPI(
     title="날씨 앱 API",
@@ -21,4 +21,4 @@ app.include_router(
 
 @app.get("/", tags=["Root"])
 def read_root():
-    return {"message": "서버가 실행 중입니다. /docs 로 이동하세요."}# Re-trigger build for arm64
+    return {"message": "서버가 실행 중입니다."}# Re-trigger build for arm64

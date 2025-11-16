@@ -63,7 +63,7 @@ jobs:
         id: build
         uses: docker/build-push-action@v6
         with:
-          context: ./app/${{ matrix.service }}
+          context: ./app # 수정
           # Dockerfile 경로를 'matrix.service'로 동적 지정
           file: ./app/${{ matrix.service }}/Dockerfile
           push: true

@@ -22,3 +22,11 @@ spec:
       selfHeal: true
     syncOptions:
     - CreateNamespace=true
+
+  ignoreDifferences:
+  - group: networking.k8s.io
+    kind: Ingress
+    name: weatherapi-ingress
+    namespace: default
+    jsonPointers:
+    - /status

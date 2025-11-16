@@ -17,5 +17,8 @@ spec:
           image: ghcr.io/woosung142/weather-k3s/weatherapi:main
           ports:
             - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: api-secret
       imagePullSecrets:
         - name: ghcr-secret

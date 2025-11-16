@@ -1,6 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-
+  # 날씨 API 파드
   - weatherapi-deployment.yaml
   - weatherapi-service.yaml
+  # 날씨 API 의존성 redis 파드
+  - redis-deployment.yaml
+  - redis-service.yaml
+  - redis-pvc.yaml
