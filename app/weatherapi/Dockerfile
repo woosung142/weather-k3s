@@ -4,11 +4,12 @@ WORKDIR /app
 
 RUN useradd -m -d /app appuser
 
-COPY requirements.txt .
+COPY weatherapi/requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY ./shared /app/shared
+COPY ./weatherapi /app/weatherapi
 
 RUN chown -R appuser:appuser /app
 

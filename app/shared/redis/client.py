@@ -2,7 +2,7 @@ import os
 from redis import Redis
 
 redis = Redis(
-    host="localhost",
+    host="redis-service",
     port=6379,
     decode_responses=True
 )

@@ -46,7 +46,10 @@ async def get_current_data(nx: int, ny: int):
     cached = redis.get(cache_key)
     if cached:
         logging.info("캐시된 날씨 데이터 사용")
-        return eval(cached)
+        try:
+            return json.loads(cached)
+        except json.JSONDecodeError:
+            logging.warning("캐시된 JSON 파싱 오류. API 재호출")
     logging.info("기상청 API에서 날씨 데이터 조회")
 
     params = get_params(nx, ny)
@@ -62,16 +65,18 @@ async def get_current_data(nx: int, ny: int):
 
             parsed = parse_items(weather_data)
 
-            redis.set(cache_key, str(parsed), ex=CASHE_EXPIRE)
+            redis.set(cache_key, json.dumps(parsed), ex=CASHE_EXPIRE)
             
             return parsed
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 401:
             raise HTTPException(status_code=401, detail="[401] 기상청 API 인증 실패. 서비스 키를 확인")
+        logging.error(f"기상청 API 호출 실패: {e.response.text}")
         raise HTTPException(status_code=e.response.status_code, detail=f"기상청 API 호출 오류: {e.response.text}")
 
     except Exception as e:
+        logging.error(f"서버 내부 오류: {e}")
         raise HTTPException(status_code=500, detail=f"서버 내부 오류: {e}")
 
 # 데이터 파싱
