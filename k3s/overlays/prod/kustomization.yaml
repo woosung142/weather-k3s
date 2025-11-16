@@ -4,4 +4,4 @@ bases:
   - ../../base
 images:
   - name: ghcr.io/woosung142/weather-k3s/weatherapi
-    newTag: main-0cd1901
+    newTag: main-57771e8
