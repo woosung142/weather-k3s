@@ -281,3 +281,6 @@ def parse_forecast_items(data:dict):
 
             parsed[fcstDate][fcstTime][label] = value
     return parsed
+#------------------------------------------------------
+# 중기예보조회
+#------------------------------------------------------

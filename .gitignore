@@ -32,3 +32,6 @@ Thumbs.db
 build/
 dist/
 *.egg-info/
+
+# helm 차트 디렉토리
+kube-prometheus-stack/
