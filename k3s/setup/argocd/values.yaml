@@ -1,0 +1,45 @@
+controller:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 512Mi
+
+server:
+  replicas: 1
+  service:
+    type: NodePort
+    nodePortHttp: 30080
+    nodePortHttps: 30443
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 512Mi
+
+repoServer:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 512Mi
+
+applicationSet:
+  replicas: 0
+
+redis:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+dex:
+  enabled: false  # SSO 비활성화
+notifications:
+  enabled: false  # 알림 비활성화
