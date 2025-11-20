@@ -5,11 +5,13 @@ import httpx
 from fastapi import HTTPException
 from datetime import datetime, timedelta
 from shared.redis.client import redis
+import asyncio
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-KMA_API_BASE_URL = "http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0"
+KMA_API_BASE_URL = "http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0"   #날씨
+AIR_API_BASE_URL = "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc"   #대기오염정보
 KMA_SERVICE_KEY = os.getenv("KMA_SERVICE_KEY")
 
 #------------------------------------------------------
@@ -42,42 +44,14 @@ def get_params(nx: int, ny: int):
 
 
 async def get_current_data(nx: int, ny: int):
-    cache_key = f"weather:{nx}:{ny}"
-    cached = redis.get(cache_key)
-    if cached:
-        logging.info("캐시된 날씨 데이터 사용")
-        try:
-            return json.loads(cached)
-        except json.JSONDecodeError:
-            logging.warning("캐시된 JSON 파싱 오류. API 재호출")
-    logging.info("기상청 API에서 날씨 데이터 조회")
-
-    params = get_params(nx, ny)
-    try:
-        async with httpx.AsyncClient(base_url=KMA_API_BASE_URL) as client:
-            response = await client.get("/getUltraSrtNcst", params=params)  #테스트 필요
-            logging.info(f"상태 코드: {response.status_code}")
-            logging.info(f"응답 헤더: {response.headers}")
-            logging.info(f"응답 내용: {response.text[:500]}")
-            response.raise_for_status()
-            
-            weather_data = response.json()
-
-            parsed = parse_items(weather_data)
-
-            redis.set(cache_key, json.dumps(parsed), ex=CASHE_EXPIRE)
-            
-            return parsed
-
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 401:
-            raise HTTPException(status_code=401, detail="[401] 기상청 API 인증 실패. 서비스 키를 확인")
-        logging.error(f"기상청 API 호출 실패: {e.response.text}")
-        raise HTTPException(status_code=e.response.status_code, detail=f"기상청 API 호출 오류: {e.response.text}")
-
-    except Exception as e:
-        logging.error(f"서버 내부 오류: {e}")
-        raise HTTPException(status_code=500, detail=f"서버 내부 오류: {e}")
+    live, daily, sky, air = await asyncio.gather(
+        get_live_weather(nx, ny),
+        get_daily_forecast(nx, ny),
+        get_sky_state(nx, ny),
+        get_air_state(nx, ny),
+        return_exceptions=True
+    )
+    return {**live, **daily, **sky, **air}
 
 # 데이터 파싱
 def parse_items(data:dict):
@@ -281,3 +255,303 @@ def parse_forecast_items(data:dict):
 
             parsed[fcstDate][fcstTime][label] = value
     return parsed
+
+# 초단기실황조회
+async def get_live_weather(nx: int, ny: int):
+    cache_key = f"weather:{nx}:{ny}"
+    cached = redis.get(cache_key)
+    if cached:
+        logging.info("캐시된 날씨 데이터 사용")
+        try:
+            return json.loads(cached)
+        except json.JSONDecodeError:
+            logging.warning("캐시된 JSON 파싱 오류. API 재호출")
+    logging.info("기상청 API에서 날씨 데이터 조회")
+
+    params = get_params(nx, ny) #api 파라미터 생성
+    try:
+        async with httpx.AsyncClient(base_url=KMA_API_BASE_URL) as client:
+            response = await client.get("/getUltraSrtNcst", params=params)  #테스트 필요
+            logging.info(f"상태 코드: {response.status_code}")
+            logging.info(f"응답 헤더: {response.headers}")
+            logging.info(f"응답 내용: {response.text[:500]}")
+            response.raise_for_status()
+            
+            weather_data = response.json()
+
+            parsed = parse_items(weather_data)  #데이터 파싱
+
+            redis.set(cache_key, json.dumps(parsed), ex=CASHE_EXPIRE)
+            
+            return parsed
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            raise HTTPException(status_code=401, detail="[401] 기상청 API 인증 실패. 서비스 키를 확인")
+        logging.error(f"기상청 API 호출 실패: {e.response.text}")
+        raise HTTPException(status_code=e.response.status_code, detail=f"기상청 API 호출 오류: {e.response.text}")
+
+    except Exception as e:
+        logging.error(f"서버 내부 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"서버 내부 오류: {e}")
+
+# 단기예보(TMN/TMX) 파싱
+def parse_tmn_tmx(data: dict):
+    try:
+        items = data["response"]["body"]["items"]["item"]
+    except KeyError:
+        return {}
+
+    parsed = {}
+    today_str = datetime.now().strftime('%Y%m%d')
+
+    for item in items:
+        if item["fcstDate"] != today_str:
+            continue
+
+        category = item["category"]
+        
+        if category == "TMN":
+            parsed["일 최저기온(°C)"] = float(item["fcstValue"])
+        elif category == "TMX":
+            parsed["일 최고기온(°C)"] = float(item["fcstValue"])
+    return parsed
+
+#단기예보(TMN/TMX)조회 -> 새벽 2시 기준
+async def get_daily_forecast(nx: int, ny: int):
+    cache_key = f"forecast:{nx}:{ny}"
+    cached = redis.get(cache_key)
+    if cached:
+        logging.info("캐시된 날씨 데이터 사용")
+        try:
+            return json.loads(cached) 
+        except json.JSONDecodeError:
+            logging.warning("캐시된 JSON 파싱 오류. API 재호출") # 수정
+    logging.info("기상청 API에서 날씨 데이터 조회")
+
+    params = {
+        "serviceKey": KMA_SERVICE_KEY,
+        "pageNo": 1,
+        "numOfRows": 1000,
+        "dataType": "JSON",
+        "base_date": datetime.now().strftime('%Y%m%d'),
+        "base_time": "0200",
+        "nx": nx,
+        "ny": ny,
+    }
+
+    logging.info(f"기상청 API(단기예보 02:00 기준) 데이터 조회 시작")
+    try:
+        transport = httpx.AsyncHTTPTransport(retries=3) # 수정
+
+        async with httpx.AsyncClient(base_url=KMA_API_BASE_URL) as client:
+            response = await client.get("/getVilageFcst", params=params)
+            logging.info(f"상태 코드: {response.status_code}")
+            logging.info(f"응답 헤더: {response.headers}")
+            logging.info(f"응답 내용: {response.text[:500]}")
+            response.raise_for_status()
+            
+            forecast_data = response.json()
+
+            parsed = parse_tmn_tmx(forecast_data)
+
+            if parsed:
+                redis.set(cache_key, json.dumps(parsed), ex=FORECAST_CASHE_EXPIRE) # 수정
+            
+            return parsed
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            raise HTTPException(status_code=401, detail="[401] 기상청 API 인증 실패. 서비스 키를 확인")
+        logging.error(f"기상청 API 호출 실패: {e.response.text}")
+        raise HTTPException(status_code=e.response.status_code, detail=f"기상청 API 호출 오류: {e.response.text}")
+
+    except Exception as e:
+        logging.error(f"서버 내부 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"서버 내부 오류: {e}")
+
+#초단기예보 - api 파라미터
+def get_ultra_params(nx: int, ny: int):
+    now = datetime.now()
+
+    if now.minute < 45:
+        target_time = now - timedelta(hours=1)
+    else:
+        target_time = now
+    base_date = target_time.strftime('%Y%m%d')
+    base_time = target_time.strftime('%H30')
+
+    params = {
+        "serviceKey": KMA_SERVICE_KEY,
+        "pageNo": 1,
+        "numOfRows": 60,
+        "dataType": "JSON",
+        "base_date": base_date,
+        "base_time": base_time,
+        "nx": nx,
+        "ny": ny,
+    }
+    return params
+
+#하늘상태 파싱
+def parse_sky_state(data: dict):
+    try:
+        items = data["response"]["body"]["items"]["item"]
+    except KeyError:
+        return {}
+
+    sky_map = {
+        "1": "맑음",
+        "3": "구름많음",
+        "4": "흐림"
+    }
+
+    for item in items:
+        if item["category"] == "SKY":
+            code = item["fcstValue"]
+            return {"하늘상태": sky_map.get(code, "구름많음")}
+            
+    return {"하늘상태": "구름많음"}
+
+async def get_sky_state(nx: int, ny: int):
+    cache_key = f"weather:sky:{nx}:{ny}"
+    cached = redis.get(cache_key)
+    if cached:
+        logging.info("캐시된 날씨 데이터 사용")
+        try:
+            return json.loads(cached)
+        except json.JSONDecodeError:
+            logging.warning("캐시된 JSON 파싱 오류. API 재호출")
+    logging.info("기상청 API에서 날씨 데이터 조회")
+
+    params = get_ultra_params(nx, ny) #api 파라미터 생성
+    try:
+        async with httpx.AsyncClient(base_url=KMA_API_BASE_URL) as client:
+            response = await client.get("/getUltraSrtFcst", params=params)  #테스트 필요
+            logging.info(f"상태 코드: {response.status_code}")
+            logging.info(f"응답 헤더: {response.headers}")
+            logging.info(f"응답 내용: {response.text[:500]}")
+            response.raise_for_status()
+            
+            weather_data = response.json()
+
+            parsed = parse_sky_state(weather_data)  #데이터 파싱
+
+            redis.set(cache_key, json.dumps(parsed), ex=CASHE_EXPIRE)
+            
+            return parsed
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            raise HTTPException(status_code=401, detail="[401] 기상청 API 인증 실패. 서비스 키를 확인")
+        logging.error(f"기상청 API 호출 실패: {e.response.text}")
+        raise HTTPException(status_code=e.response.status_code, detail=f"기상청 API 호출 오류: {e.response.text}")
+
+    except Exception as e:
+        logging.error(f"서버 내부 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"서버 내부 오류: {e}")
+
+#------------------------------------------------------
+#대기오염정보조회
+#------------------------------------------------------
+#위치 JSON 파일 로드
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+JSON_PATH = os.path.join(BASE_DIR, "station.json")
+try:
+    with open(JSON_PATH, "r", encoding="utf-8") as f:
+        NX_NY_TO_STATION = json.load(f)
+    logger.info(f"측정소 매핑 테이블 로드 완료: {len(NX_NY_TO_STATION)}개 지점")
+except FileNotFoundError:
+    NX_NY_TO_STATION = {}
+    logger.warningf("파일을 찾을 수 없습니다: {JSON_PATH}. 기본값(종로구)만 사용됩니다.")
+
+# API 요청 파라미터
+def get_air_params(nx: int, ny: int):
+    key = f"{nx},{ny}"
+    station_name = NX_NY_TO_STATION.get(key, "종로구")  #기본값 종로구
+
+    params = {
+        "serviceKey": KMA_SERVICE_KEY,
+        "returnType": "JSON",
+        "numOfRows": 1,
+        "pageNo": 1,
+        "stationName": station_name,
+        "dataTerm": "DAILY",
+        "ver": "1.3"
+    }
+    return params
+
+# 대기오염정보조회
+async def get_air_state(nx: int, ny: int):
+    cache_key = f"weather:air:{nx}:{ny}"
+    cached = redis.get(cache_key)
+    if cached:
+        logging.info("캐시된 날씨 데이터 사용(대기오염정보)")
+        try:
+            return json.loads(cached)
+        except json.JSONDecodeError:
+            logging.warning("캐시된 JSON 파싱 오류. API 재호출")
+    logging.info("기상청 API에서 날씨 데이터 조회 (대기오염정보)")
+
+    params = get_air_params(nx, ny) #api 파라미터 생성
+    try:
+        async with httpx.AsyncClient(base_url=AIR_API_BASE_URL) as client:
+            response = await client.get("/getMsrstnAcctoRltmMesureDnsty", params=params)  #테스트 필요
+            logging.info(f"상태 코드: {response.status_code}")
+            logging.info(f"응답 헤더: {response.headers}")
+            logging.info(f"응답 내용: {response.text[:500]}")
+            response.raise_for_status()
+            
+            air_data = response.json()
+
+            parsed = parse_air_state(air_data)  #데이터 파싱
+
+            redis.set(cache_key, json.dumps(parsed), ex=CASHE_EXPIRE)
+            
+            return parsed
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            raise HTTPException(status_code=401, detail="[401] 기상청 API 인증 실패. 서비스 키를 확인")
+        logging.error(f"기상청 API 호출 실패: {e.response.text}")
+        raise HTTPException(status_code=e.response.status_code, detail=f"기상청 API 호출 오류: {e.response.text}")
+
+    except Exception as e:
+        logging.error(f"서버 내부 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"서버 내부 오류: {e}")
+
+def parse_air_state(data: dict):
+    try:
+        items = data["response"]["body"]["items"]
+        if not items:
+            return {"미세먼지": "정보없음", "초미세먼지": "정보없음"}
+            
+        item = items[0]
+
+        grade_map = {
+            "1": "좋음",
+            "2": "보통",
+            "3": "나쁨",
+            "4": "매우나쁨"
+        }
+        
+        pm10_code = item.get("pm10Grade1h") or item.get("pm10Grade")
+        pm25_code = item.get("pm25Grade1h") or item.get("pm25Grade")
+
+        pm10_status = grade_map.get(str(pm10_code), "정보없음")
+        pm25_status = grade_map.get(str(pm25_code), "정보없음")
+
+        pm10_value = item.get("pm10Value", "-")
+        pm25_value = item.get("pm25Value", "-")
+        data_time = item.get("dataTime", "")
+
+        return {
+            "미세먼지": pm10_status,          # 예: "보통"
+            "초미세먼지": pm25_status,        # 예: "나쁨"
+            "미세먼지농도": pm10_value,       # 예: "73"
+            "초미세먼지농도": pm25_value,     # 예: "44"
+            "측정시간": data_time             # 예: "2020-11-25 13:00"
+        }
+
+    except (KeyError, IndexError, AttributeError):
+        return {"미세먼지": "정보없음", "초미세먼지": "정보없음"}
