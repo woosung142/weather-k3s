@@ -1,24 +1,25 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: networking-infra
+  name: argocd
   namespace: argocd
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   project: default
+  
+  sources:
+    - repoURL: https://github.com/woosung142/weather-k3s.git
+      targetRevision: main
+      path: k3s/setup/argocd
 
-  source:
-    repoURL: https://github.com/woosung142/weather-k3s.git
-    targetRevision: main
-    path: k3s/infra
   destination:
     server: https://kubernetes.default.svc
-    namespace: default
+    namespace: argocd
 
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
-    - CreateNamespace=true
+      - CreateNamespace=true
