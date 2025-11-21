@@ -43,3 +43,7 @@ dex:
   enabled: false  # SSO 비활성화
 notifications:
   enabled: false  # 알림 비활성화
+
+configs:
+  cm:
+    kustomize.buildOptions: --enable-helm
