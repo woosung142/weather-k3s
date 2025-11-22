@@ -32,3 +32,6 @@ Thumbs.db
 build/
 dist/
 *.egg-info/
+
+#helm repo
+kube-prometheus-stack/
