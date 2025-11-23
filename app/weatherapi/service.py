@@ -5,6 +5,7 @@ import httpx
 from fastapi import HTTPException
 from datetime import datetime, timedelta
 from shared.redis.client import redis
+from . import parsers
 import asyncio
 
 logger = logging.getLogger(__name__)
@@ -51,48 +52,19 @@ async def get_current_data(nx: int, ny: int):
         get_air_state(nx, ny),
         return_exceptions=True
     )
+    def safe(data):
+        if isinstance(data, Exception):
+            # 로그 남기기
+            logging.error(f"Weather API failed: {data}")
+            return {}
+        return data
+
+    live  = safe(live)
+    daily = safe(daily)
+    sky   = safe(sky)
+    air   = safe(air)
+
     return {**live, **daily, **sky, **air}
-
-# 데이터 파싱
-def parse_items(data:dict):
-    try:
-        items = data["response"]["body"]["items"]["item"]
-    except KeyError:
-        raise HTTPException(status_code=500, detail="기상청 응답 구조가 올바르지 않습니다.")
-
-    category_map = {
-        "T1H": "기온(°C)",
-        "REH": "습도(%)",
-        "RN1": "1시간 강수량(mm)",
-        "PTY": "강수형태", #코드값
-        "WSD": "풍속(m/s)",
-        "VEC": "풍향(deg)",
-    }
-
-    rain_type_map = {
-        "0": "없음",
-        "1": "비",
-        "2": "비/눈",
-        "3": "눈",
-        "5": "빗방울",
-        "6": "빗방울눈날림",
-        "7": "눈날림",
-    }
-
-    parsed = {}
-    for item in items:
-        category = item["category"]
-        value = item["obsrValue"]
-
-        if category in category_map:
-            label = category_map[category]
-
-            if category == "PTY":  # 강수형태 코드 변환
-                value = rain_type_map.get(value, "알 수 없음")
-
-            parsed[label] = float(value) if value.replace('.', '', 1).isdigit() else value
-
-    return parsed
 
 #------------------------------------------------------
 # 단기예보조회
@@ -103,7 +75,7 @@ FORECAST_CASHE_EXPIRE = 3 * 60 * 60  # 3시간
 def get_forecast_params(nx: int, ny: int):
     now = datetime.now()
 
-    target_time = now - timedelta(minutes=10)   #API 제공 시간
+    target_time = now - timedelta(minutes=45)   #API 제공 시간
     valid_base_times = [2, 5, 8, 11, 14, 17, 20, 23]    # 1일 8회
 
     base_hour = -1
@@ -133,7 +105,7 @@ def get_forecast_params(nx: int, ny: int):
     return params
     
 async def get_forecast_data(nx: int, ny: int):
-    cache_key = f"forecast:{nx}:{ny}"
+    cache_key = f"forecast:short:{nx}:{ny}"
     cached = redis.get(cache_key)
     if cached:
         logging.info("캐시된 날씨 데이터 사용")
@@ -156,7 +128,7 @@ async def get_forecast_data(nx: int, ny: int):
             
             forecast_data = response.json()
 
-            parsed = parse_forecast_items(forecast_data)
+            parsed = parsers.parse_forecast_items(forecast_data)
 
             redis.set(cache_key, json.dumps(parsed), ex=FORECAST_CASHE_EXPIRE) # 수정
             
@@ -171,90 +143,6 @@ async def get_forecast_data(nx: int, ny: int):
     except Exception as e:
         logging.error(f"서버 내부 오류: {e}")
         raise HTTPException(status_code=500, detail=f"서버 내부 오류: {e}")
-
-# 데이터 파싱
-def parse_forecast_items(data:dict):
-    try:
-        items = data["response"]["body"]["items"]["item"]
-    except KeyError:
-        raise HTTPException(status_code=500, detail="기상청 응답 구조가 올바르지 않습니다.")
-
-    category_map = {
-        "POP": "강수확률(%)",
-        "PTY": "강수형태",  #코드값
-        "PCP": "1시간 강수량(mm)",  #코드값
-        "REH": "습도(%)",
-        "SNO": "1시간 신적설(cm)",  #코드값
-        "SKY": "하늘상태",  #코드값
-        "TMP": "기온(°C)",
-        "TMN": "일 최저기온(°C)",
-        "TMX": "일 최고기온(°C)",
-        "UUU": "풍속(동서성분)(m/s)",
-        "VVV": "풍속(남북성분)(m/s)",
-        "WAV": "파고(m)",
-        "VEC": "풍향(deg)",
-        "WSD": "풍속(m/s)"  #코드값
-    }
-
-    rain_type_map = {
-        "0": "없음",
-        "1": "비",
-        "2": "비/눈",
-        "3": "눈",
-        "4": "소나기"
-    }
-    sky_type_map = {
-        "1": "맑음",
-        "3": "구름많음",
-        "4": "흐림"
-    }
-    pcp_type_map = {    # 강수량(PCP) 코드 변환
-        "1": "약한 비", # 시간당 3mm 미만
-        "2": "보통 비", # 시간당 3mm 이상 15mm 미만
-        "3": "강한 비"  # 시간당 15mm 이상
-    }
-
-    sno_type_map = {    # 눈의 양(SNO) 코드 변환
-        "1": "보통 눈", # 시간당 1cm 미만
-        "2": "많은 눈"  # 시간당 1cm 이상
-    }
-    
-    wsd_type_map = {    # 풍 속(WSD) 코드 변환
-        "1": "약한 바람",       # 4m/s 이상
-        "2": "약간 강한 바람",  # 4m/s 이상 9m/s 미만
-        "3": "강한 바람"        # 9m/s 이상
-    }
-
-    parsed = {}
-    for item in items:
-        category = item["category"]
-        value = item["fcstValue"]
-        fcstDate = item["fcstDate"]
-        fcstTime = item["fcstTime"]
-
-        if category in category_map:
-            label = category_map[category]
-
-            if category == "PTY":  # 강수형태 코드 변환
-                value = rain_type_map.get(value, "알 수 없음")
-            elif category == "SKY":  # 하늘상태 코드 변환
-                value = sky_type_map.get(value, "알 수 없음")
-            elif category == "PCP":  # 강수량 코드 변환
-                value = pcp_type_map.get(value, value)
-            elif category == "SNO":  # 눈의 양 코드 변환
-                value = sno_type_map.get(value, value)
-            elif category == "WSD":  # 풍 속 코드 변환
-                value = wsd_type_map.get(value, value)
-            else:
-                value = float(value) if value.replace('.', '', 1).isdigit() else value
-
-            if fcstDate not in parsed:
-                parsed[fcstDate] = {}
-            if fcstTime not in parsed[fcstDate]:
-                parsed[fcstDate][fcstTime] = {}
-
-            parsed[fcstDate][fcstTime][label] = value
-    return parsed
 
 # 초단기실황조회
 async def get_live_weather(nx: int, ny: int):
@@ -279,7 +167,7 @@ async def get_live_weather(nx: int, ny: int):
             
             weather_data = response.json()
 
-            parsed = parse_items(weather_data)  #데이터 파싱
+            parsed = parsers.parse_items(weather_data)  #데이터 파싱
 
             redis.set(cache_key, json.dumps(parsed), ex=CASHE_EXPIRE)
             
@@ -294,28 +182,6 @@ async def get_live_weather(nx: int, ny: int):
     except Exception as e:
         logging.error(f"서버 내부 오류: {e}")
         raise HTTPException(status_code=500, detail=f"서버 내부 오류: {e}")
-
-# 단기예보(TMN/TMX) 파싱
-def parse_tmn_tmx(data: dict):
-    try:
-        items = data["response"]["body"]["items"]["item"]
-    except KeyError:
-        return {}
-
-    parsed = {}
-    today_str = datetime.now().strftime('%Y%m%d')
-
-    for item in items:
-        if item["fcstDate"] != today_str:
-            continue
-
-        category = item["category"]
-        
-        if category == "TMN":
-            parsed["일 최저기온(°C)"] = float(item["fcstValue"])
-        elif category == "TMX":
-            parsed["일 최고기온(°C)"] = float(item["fcstValue"])
-    return parsed
 
 #단기예보(TMN/TMX)조회 -> 새벽 2시 기준
 async def get_daily_forecast(nx: int, ny: int):
@@ -353,7 +219,7 @@ async def get_daily_forecast(nx: int, ny: int):
             
             forecast_data = response.json()
 
-            parsed = parse_tmn_tmx(forecast_data)
+            parsed = parsers.parse_tmn_tmx(forecast_data)
 
             if parsed:
                 redis.set(cache_key, json.dumps(parsed), ex=FORECAST_CASHE_EXPIRE) # 수정
@@ -393,26 +259,6 @@ def get_ultra_params(nx: int, ny: int):
     }
     return params
 
-#하늘상태 파싱
-def parse_sky_state(data: dict):
-    try:
-        items = data["response"]["body"]["items"]["item"]
-    except KeyError:
-        return {}
-
-    sky_map = {
-        "1": "맑음",
-        "3": "구름많음",
-        "4": "흐림"
-    }
-
-    for item in items:
-        if item["category"] == "SKY":
-            code = item["fcstValue"]
-            return {"하늘상태": sky_map.get(code, "구름많음")}
-            
-    return {"하늘상태": "구름많음"}
-
 async def get_sky_state(nx: int, ny: int):
     cache_key = f"weather:sky:{nx}:{ny}"
     cached = redis.get(cache_key)
@@ -435,7 +281,7 @@ async def get_sky_state(nx: int, ny: int):
             
             weather_data = response.json()
 
-            parsed = parse_sky_state(weather_data)  #데이터 파싱
+            parsed = parsers.parse_sky_state(weather_data)  #데이터 파싱
 
             redis.set(cache_key, json.dumps(parsed), ex=CASHE_EXPIRE)
             
@@ -504,7 +350,7 @@ async def get_air_state(nx: int, ny: int):
             
             air_data = response.json()
 
-            parsed = parse_air_state(air_data)  #데이터 파싱
+            parsed = parsers.parse_air_state(air_data)  #데이터 파싱
 
             redis.set(cache_key, json.dumps(parsed), ex=CASHE_EXPIRE)
             
@@ -520,38 +366,107 @@ async def get_air_state(nx: int, ny: int):
         logging.error(f"서버 내부 오류: {e}")
         raise HTTPException(status_code=500, detail=f"서버 내부 오류: {e}")
 
-def parse_air_state(data: dict):
+#------------------------------------------------------
+#2. 시간별 날씨 기능
+#------------------------------------------------------
+# 초단기예보 조회 (시간별)
+async def get_ultra_forecast_data(nx: int, ny: int):
+    cache_key = f"forecast:ultra:{nx}:{ny}"
+    cached = redis.get(cache_key)
+    if cached:
+        logging.info("캐시된 날씨 데이터 사용")
+        try:
+            return json.loads(cached)
+        except json.JSONDecodeError:
+            logging.warning("캐시된 JSON 파싱 오류. API 재호출")
+    logging.info("기상청 API에서 날씨 데이터 조회 (초단기예보 - 시간별)")
+
+    params = get_ultra_params(nx, ny) #api 파라미터 생성
     try:
-        items = data["response"]["body"]["items"]
-        if not items:
-            return {"미세먼지": "정보없음", "초미세먼지": "정보없음"}
+        async with httpx.AsyncClient(base_url=KMA_API_BASE_URL) as client:
+            response = await client.get("/getUltraSrtFcst", params=params)  #테스트 필요
+            logging.info(f"상태 코드: {response.status_code}")
+            logging.info(f"응답 헤더: {response.headers}")
+            logging.info(f"응답 내용: {response.text[:500]}")
+            response.raise_for_status()
             
-        item = items[0]
+            forecast_data = response.json()
 
-        grade_map = {
-            "1": "좋음",
-            "2": "보통",
-            "3": "나쁨",
-            "4": "매우나쁨"
+            parsed = parsers.parse_ultr_forecast_items(forecast_data)  #데이터 파싱
+
+            redis.set(cache_key, json.dumps(parsed), ex=CASHE_EXPIRE)
+            
+            return parsed
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            raise HTTPException(status_code=401, detail="[401] 기상청 API 인증 실패. 서비스 키를 확인")
+        logging.error(f"기상청 API 호출 실패: {e.response.text}")
+        raise HTTPException(status_code=e.response.status_code, detail=f"기상청 API 호출 오류: {e.response.text}")
+
+    except Exception as e:
+        logging.error(f"서버 내부 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"서버 내부 오류: {e}")
+
+# 단기 + 초단기 예보 통합 조회 (시간별)
+async def get_hourly_forecast_data(nx: int, ny: int):
+    results = await asyncio.gather(
+        get_ultra_forecast_data(nx, ny),
+        get_forecast_data(nx, ny),
+        return_exceptions=True
+    )
+    def safe_get(data):
+        if isinstance(data, Exception):
+            logging.error(f"API 호출 중 에러 발생: {data}") # 로그에 에러 남김
+            return {} # 에러면 빈 딕셔너리 반환
+        return data
+
+    ultra = safe_get(results[0])
+    short = safe_get(results[1])
+
+    hourly_list = []
+    current_time = datetime.now()
+
+    for i in range(24):
+        target_time = current_time + timedelta(hours=i)
+
+        t_date = target_time.strftime('%Y%m%d')
+        t_time = target_time.strftime('%H00')
+
+        weather_item = {
+            "date": t_date,
+            "time": t_time,
+            "temp": None,       # 기온
+            "sky": "정보없음",   # 하늘상태
+            "pty": "없음",       # 강수형태
+            "rain_amount": "-", # 강수량
+            "pop": 0
         }
-        
-        pm10_code = item.get("pm10Grade1h") or item.get("pm10Grade")
-        pm25_code = item.get("pm25Grade1h") or item.get("pm25Grade")
 
-        pm10_status = grade_map.get(str(pm10_code), "정보없음")
-        pm25_status = grade_map.get(str(pm25_code), "정보없음")
+        if short and t_date in short and t_time in short[t_date]:
+            data = short[t_date][t_time]
+            weather_item["temp"] = data.get("기온(°C)")
+            weather_item["sky"] = data.get("하늘상태", "정보없음")
+            weather_item["pty"] = data.get("강수형태", "없음")
+            weather_item["rain_amount"] = data.get("1시간 강수량(mm)", "-")
+            weather_item["pop"] = data.get("강수확률(%)", 0)
 
-        pm10_value = item.get("pm10Value", "-")
-        pm25_value = item.get("pm25Value", "-")
-        data_time = item.get("dataTime", "")
+        if ultra and t_date in ultra and t_time in ultra[t_date]:
+            data = ultra[t_date][t_time]
+            
+            # 초단기 예보에 있는 값으로 교체
+            if "기온(°C)" in data:
+                weather_item["temp"] = data["기온(°C)"]
+            if "하늘상태" in data:
+                weather_item["sky"] = data["하늘상태"]
+            if "강수형태" in data:
+                weather_item["pty"] = data["강수형태"]
+            if "1시간 강수량(mm)" in data:
+                weather_item["rain_amount"] = data["1시간 강수량(mm)"]
+            # 참고: 초단기예보에는 강수확률(POP)이 없으므로 단기예보 값을 그대로 유지
+            
+        # 데이터가 유효한 경우에만 리스트에 추가 (과거 데이터 등 제외 로직이 필요하면 추가)
+        if weather_item["temp"] is not None:
+             hourly_list.append(weather_item)
 
-        return {
-            "미세먼지": pm10_status,          # 예: "보통"
-            "초미세먼지": pm25_status,        # 예: "나쁨"
-            "미세먼지농도": pm10_value,       # 예: "73"
-            "초미세먼지농도": pm25_value,     # 예: "44"
-            "측정시간": data_time             # 예: "2020-11-25 13:00"
-        }
-
-    except (KeyError, IndexError, AttributeError):
-        return {"미세먼지": "정보없음", "초미세먼지": "정보없음"}
+    return hourly_list
