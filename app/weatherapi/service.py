@@ -13,12 +13,15 @@ logging.basicConfig(level=logging.INFO)
 
 KMA_API_BASE_URL = "http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0"   #날씨
 AIR_API_BASE_URL = "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc"   #대기오염정보
+KMA_API_MID_URL = "https://apis.data.go.kr/1360000/MidFcstInfoService"  #중기예보
 KMA_SERVICE_KEY = os.getenv("KMA_SERVICE_KEY")
+
+CASHE_EXPIRE = 300  # 5분
+MID_TERM_CACHE_EXPIRE = 6 * 60 * 60 # 6시간
 
 #------------------------------------------------------
 # 초단기실황조회(현재날씨)
 #------------------------------------------------------
-CASHE_EXPIRE = 300  # 5분
 
 # API 요청 파라미터
 def get_params(nx: int, ny: int):
@@ -303,18 +306,20 @@ async def get_sky_state(nx: int, ny: int):
 #위치 JSON 파일 로드
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 JSON_PATH = os.path.join(BASE_DIR, "station.json")
+LOCATION_MAP = {}
 try:
     with open(JSON_PATH, "r", encoding="utf-8") as f:
-        NX_NY_TO_STATION = json.load(f)
-    logger.info(f"측정소 매핑 테이블 로드 완료: {len(NX_NY_TO_STATION)}개 지점")
+        LOCATION_MAP = json.load(f)
+    logger.info(f"측정소 매핑 테이블 로드 완료: {len(LOCATION_MAP)}개 지점")
 except FileNotFoundError:
-    NX_NY_TO_STATION = {}
+    LOCATION_MAP = {}
     logger.warningf("파일을 찾을 수 없습니다: {JSON_PATH}. 기본값(종로구)만 사용됩니다.")
 
 # API 요청 파라미터
 def get_air_params(nx: int, ny: int):
     key = f"{nx},{ny}"
-    station_name = NX_NY_TO_STATION.get(key, "종로구")  #기본값 종로구
+    info = LOCATION_MAP.get(key)
+    station_name = info["station"] if info else "서대문구"
 
     params = {
         "serviceKey": KMA_SERVICE_KEY,
@@ -470,3 +475,174 @@ async def get_hourly_forecast_data(nx: int, ny: int):
              hourly_list.append(weather_item)
 
     return hourly_list
+
+# ------------------------------------------------------
+# 3. 주간 날씨 조회 기능
+# ------------------------------------------------------
+# 좌표로 구역 코드
+def get_mid_reg_code(nx: int, ny: int):
+    key = f"{nx},{ny}"
+    info = LOCATION_MAP.get(key)
+    if info:
+        return info["land"], info["ta"]
+    else:
+        return "11B00000", "11B10101"  #기본값
+
+# 중기예보 API 파라미터 생성
+def get_mid_term_params(reg_id: str):
+    now = datetime.now()
+    
+    if now.hour < 6:
+        target = now - timedelta(days=1)
+        tmFc = target.strftime("%Y%m%d1800")
+    elif now.hour < 18:
+        tmFc = now.strftime("%Y%m%d0600")
+    else:
+        tmFc = now.strftime("%Y%m%d1800")
+
+    return {
+        "serviceKey": KMA_SERVICE_KEY,
+        "pageNo": 1,
+        "numOfRows": 10,
+        "dataType": "JSON",
+        "regId": reg_id,
+        "tmFc": tmFc
+    }
+
+#중기 기온 조회
+async def get_mid_ta(reg_id: str):
+    cache_key = f"week:mid:ta:{reg_id}"
+    cached = redis.get(cache_key)
+    if cached:
+        logging.info("캐시된 날씨 데이터 사용")
+        try:
+            return json.loads(cached)
+        except json.JSONDecodeError:
+            logging.warning("캐시된 JSON 파싱 오류. API 재호출")
+    logging.info("기상청 API에서 날씨 데이터 조회 (중기 기온- 주간별)")
+
+    params = get_mid_term_params(reg_id) #api 파라미터 생성
+    try:
+        async with httpx.AsyncClient(base_url=KMA_API_MID_URL) as client:
+            response = await client.get("/getMidTa", params=params)  #테스트 필요
+            logging.info(f"상태 코드: {response.status_code}")
+            logging.info(f"응답 헤더: {response.headers}")
+            logging.info(f"응답 내용: {response.text[:500]}")
+            response.raise_for_status()
+            
+            week_data = response.json()
+
+            parsed = parsers.parse_mid_ta(week_data)  #데이터 파싱
+
+            redis.set(cache_key, json.dumps(parsed), ex=MID_TERM_CACHE_EXPIRE)
+            
+            return parsed
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            raise HTTPException(status_code=401, detail="[401] 기상청 API 인증 실패. 서비스 키를 확인")
+        logging.error(f"기상청 API 호출 실패: {e.response.text}")
+        raise HTTPException(status_code=e.response.status_code, detail=f"기상청 API 호출 오류: {e.response.text}")
+
+    except Exception as e:
+        logging.error(f"서버 내부 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"서버 내부 오류: {e}")
+
+#중기 육상 기온 조회
+async def get_mid_land(reg_id: str):
+    cache_key = f"week:mid:land:{reg_id}"
+    cached = redis.get(cache_key)
+    if cached:
+        logging.info("캐시된 날씨 데이터 사용")
+        try:
+            return json.loads(cached)
+        except json.JSONDecodeError:
+            logging.warning("캐시된 JSON 파싱 오류. API 재호출")
+    logging.info("기상청 API에서 날씨 데이터 조회 (중기 육상 - 주간별)")
+
+    params = get_mid_term_params(reg_id) #api 파라미터 생성
+    try:
+        async with httpx.AsyncClient(base_url=KMA_API_MID_URL) as client:
+            response = await client.get("/getMidLandFcst", params=params)  #테스트 필요
+            logging.info(f"상태 코드: {response.status_code}")
+            logging.info(f"응답 헤더: {response.headers}")
+            logging.info(f"응답 내용: {response.text[:500]}")
+            response.raise_for_status()
+            
+            week_data = response.json()
+
+            parsed = parsers.parse_mid_land(week_data)  #데이터 파싱
+
+            redis.set(cache_key, json.dumps(parsed), ex=MID_TERM_CACHE_EXPIRE)
+            
+            return parsed
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            raise HTTPException(status_code=401, detail="[401] 기상청 API 인증 실패. 서비스 키를 확인")
+        logging.error(f"기상청 API 호출 실패: {e.response.text}")
+        raise HTTPException(status_code=e.response.status_code, detail=f"기상청 API 호출 오류: {e.response.text}")
+
+    except Exception as e:
+        logging.error(f"서버 내부 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"서버 내부 오류: {e}")
+
+#주간 날씨 조회 통합
+async def get_weekly_forecast_data(nx: int, ny: int):
+    land_code, ta_code = get_mid_reg_code(nx, ny)
+
+    results = await asyncio.gather(
+        get_forecast_data(nx, ny),
+        get_mid_ta(ta_code),
+        get_mid_land(land_code),
+        return_exceptions=True
+    )
+    def safe(d): return {} if isinstance(d, Exception) else d
+    short_data = safe(results[0])
+    mid_ta = safe(results[1])
+    mid_land = safe(results[2])
+
+    weekly_map = {}
+
+    # 3. 단기예보(시간별) -> 일별 요약으로 변환
+    # (parsers.py에 aggregate_short_term_to_daily 함수가 있어야 함)
+    if short_data:
+        short_daily = parsers.aggregate_short_term_to_daily(short_data)
+        for date, info in short_daily.items():
+            weekly_map[date] = info
+
+    # 4. 중기예보(3~7일) 병합
+    today = datetime.now()
+    # 3일 뒤부터 7일 뒤까지 (API가 10일치까지 주기도 하지만 보통 7일치 사용)
+    for day in range(3, 8): 
+        target_date = (today + timedelta(days=day)).strftime("%Y%m%d")
+        
+        item = {
+            "date": target_date,
+            "min_temp": None,
+            "max_temp": None,
+            "sky_am": "정보없음",
+            "sky_pm": "정보없음",
+            "pop": 0
+        }
+
+        # 기온 데이터 병합
+        if mid_ta and target_date in mid_ta:
+            item["min_temp"] = mid_ta[target_date]["min_temp"]
+            item["max_temp"] = mid_ta[target_date]["max_temp"]
+        
+        # 날씨 데이터 병합
+        if mid_land and target_date in mid_land:
+            item["sky_am"] = mid_land[target_date]["sky_am"]
+            item["sky_pm"] = mid_land[target_date]["sky_pm"]
+            item["pop"] = mid_land[target_date]["pop"]
+
+        # 데이터가 있으면 리스트에 추가
+        if item["min_temp"] is not None:
+            weekly_map[target_date] = item
+            
+    # 날짜순 정렬
+    weekly_list = list(weekly_map.values())
+    weekly_list.sort(key=lambda x: x["date"])
+
+    return weekly_list
