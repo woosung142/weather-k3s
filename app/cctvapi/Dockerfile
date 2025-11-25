@@ -1,4 +1,4 @@
-# 1. 기본 이미지 지정: 작고 안정적인 Python 3.10-slim 이미지 사용
+k# 1. 기본 이미지 지정: 작고 안정적인 Python 3.10-slim 이미지 사용
 FROM python:3.10-slim
 
 # 2. 작업 디렉토리 설정: 모든 파일이 이 디렉토리 안에 위치합니다.
@@ -23,8 +23,8 @@ RUN chown -R appuser:appuser /app
 USER appuser
 
 # 9. 포트 노출: 서버가 통신할 포트(8000)를 외부에 알립니다.
-EXPOSE 8000
+EXPOSE 8100
 
 # 10. 서버 실행 명령어: 서버가 시작될 때 실행할 최종 명령입니다.
 #     uvicorn [모듈 이름]:[인스턴스 이름] (server:app)을 사용하여 서버를 구동합니다.
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "cctvapi.server:app", "--host", "0.0.0.0", "--port", "8100"]
