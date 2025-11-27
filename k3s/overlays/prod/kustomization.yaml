@@ -6,4 +6,4 @@ images:
   - name: ghcr.io/woosung142/weather-k3s/weatherapi
     newTag: main-f129e16
   - name: ghcr.io/woosung142/weather-k3s/cctvapi
-    newTag: main-d3a0176
+    newTag: main-20d34cb
