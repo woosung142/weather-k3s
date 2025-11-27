@@ -6,7 +6,7 @@ from fastapi import HTTPException
 # api/weather/current
 # ----------------------------------------------
 
-# 데이터 파싱 (초단기실황) -> /current 에서 사용
+# 데이터 파싱 (초단기실황) -> /current 에서 사용.
 def parse_items(data:dict):
     try:
         items = data["response"]["body"]["items"]["item"]
