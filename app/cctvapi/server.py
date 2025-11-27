@@ -1,6 +1,7 @@
 import requests
 import numpy as np
-import json 
+import json
+import os
 
 from fastapi import FastAPI, HTTPException, Query
 from typing import Optional, Dict, Any, Tuple, List 
