@@ -32,3 +32,8 @@ Thumbs.db
 build/
 dist/
 *.egg-info/
+
+argo-cd/
+sealed-secret/
+
+secret/

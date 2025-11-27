@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cctvapi-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cctvapi
+  template:
+    metadata:
+      labels:
+        app: cctvapi
+    spec:
+      containers:
+        - name: cctvapi
+          image: ghcr.io/woosung142/weather-k3s/cctvapi:main
+          ports:
+            - containerPort: 8100
+          envFrom:
+            - secretRef:
+                name: cctv-secret
+      imagePullSecrets:
+        - name: ghcr-secret
