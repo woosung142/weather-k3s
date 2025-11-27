@@ -34,3 +34,6 @@ dist/
 *.egg-info/
 
 argo-cd/
+sealed-secret/
+
+secret/

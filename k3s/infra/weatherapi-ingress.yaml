@@ -17,6 +17,13 @@ spec:
                 name: weatherapi-service
                 port:
                   number: 80
+          - path: /get_cctv
+            pathType: Prefix
+            backend:
+              service:
+                name: cctvapi-service
+                port:
+                  number: 80
           - path: /
             pathType: Prefix
             backend:

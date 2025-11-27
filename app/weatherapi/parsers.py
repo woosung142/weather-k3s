@@ -345,13 +345,11 @@ def aggregate_short_term_to_daily(short_data: dict):
 
         for time, val in times.items():
             if "기온(°C)" in val: temps.append(safe_float(val["기온(°C)"]))
-            if "하늘상태" in val: skies.append(val["하늘상태"]) # 개수 세서 최빈값 로직 가능
+            if "하늘상태" in val: skies.append(val["하늘상태"])
             if "강수확률(%)" in val: rain_probs.append(int(safe_float(val["강수확률(%)"])))
 
         if not temps: continue
 
-        # 오전/오후 대표 날씨 (간단히 09시, 15시 기준 혹은 전체 평균)
-        # 여기서는 가장 많이 등장한 날씨를 대표로 설정
         import collections
         most_common_sky = collections.Counter(skies).most_common(1)[0][0] if skies else "맑음"
         max_pop = max(rain_probs) if rain_probs else 0
@@ -360,7 +358,7 @@ def aggregate_short_term_to_daily(short_data: dict):
             "date": date,
             "min_temp": min(temps),
             "max_temp": max(temps),
-            "sky_am": most_common_sky, # 단기예보는 오전/오후 구분이 명확지 않아 통일
+            "sky_am": most_common_sky,
             "sky_pm": most_common_sky,
             "pop": max_pop
         }

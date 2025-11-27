@@ -604,8 +604,6 @@ async def get_weekly_forecast_data(nx: int, ny: int):
 
     weekly_map = {}
 
-    # 3. 단기예보(시간별) -> 일별 요약으로 변환
-    # (parsers.py에 aggregate_short_term_to_daily 함수가 있어야 함)
     if short_data:
         short_daily = parsers.aggregate_short_term_to_daily(short_data)
         for date, info in short_daily.items():
@@ -613,7 +611,6 @@ async def get_weekly_forecast_data(nx: int, ny: int):
 
     # 4. 중기예보(3~7일) 병합
     today = datetime.now()
-    # 3일 뒤부터 7일 뒤까지 (API가 10일치까지 주기도 하지만 보통 7일치 사용)
     for day in range(3, 8): 
         target_date = (today + timedelta(days=day)).strftime("%Y%m%d")
         
