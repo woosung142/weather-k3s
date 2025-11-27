@@ -17,7 +17,11 @@ def get_nearest_cctv_info(lat: float, lng: float) -> Optional[Tuple[Dict[str, An
     ITS 국가교통정보센터 API를 호출하여 입력된 경위도에 가장 가까운 CCTV 정보를 찾습니다.
     """
     # API Key를 함수 내부에 직접 명시했습니다. (원래 방식대로 복구)
-    API_KEY = "84df5a39432d4f89abcd8a84d858482f" 
+    API_KEY = os.getenv("ITS_CCTV_API_KEY")
+
+    if not API_KEY:
+        print("오류: ITS_CCTV_API_KEY 환경 변수가 설정 X")
+        return None, "서버 설정 오류: API 키가 없습니다."
 
     # 탐색 범위를 ±0.5도로 설정했습니다.
     minX = str(lng - 0.5)

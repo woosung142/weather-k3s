@@ -2,9 +2,17 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   # 날씨 API 파드
-  - weatherapi-deployment.yaml
-  - weatherapi-service.yaml
+  - weatherapi/weatherapi-deployment.yaml
+  - weatherapi/weatherapi-service.yaml
+  # CCTV API 파드
+  - cctvapi/cctvapi-deployment.yaml
+  - cctvapi/cctvapi-service.yaml
   # 날씨 API 의존성 redis 파드
-  - redis-deployment.yaml
-  - redis-service.yaml
-  - redis-pvc.yaml
+  - redis/redis-deployment.yaml
+  - redis/redis-service.yaml
+  - redis/redis-pvc.yaml
+  # 시크릿 파일
+  - secrets/sealed-api-secret.yaml
+  - secrets/sealed-ghcr-secret.yaml
+  - secrets/sealed-cctv-secret.yaml
+  - secrets/sealed-tunnel-secret.yaml

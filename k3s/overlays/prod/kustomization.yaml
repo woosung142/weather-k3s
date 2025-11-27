@@ -5,3 +5,5 @@ bases:
 images:
   - name: ghcr.io/woosung142/weather-k3s/weatherapi
     newTag: main-8fd1e40
+  - name: ghcr.io/woosung142/weather-k3s/cctvapi
+    newTag: main
