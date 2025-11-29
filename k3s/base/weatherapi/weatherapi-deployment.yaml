@@ -12,6 +12,8 @@ spec:
       labels:
         app: weatherapi
     spec:
+      imagePullSecrets:
+        - name: ghcr-secret
       containers:
         - name: weatherapi
           image: ghcr.io/woosung142/weather-k3s/weatherapi:main
@@ -20,12 +22,10 @@ spec:
           envFrom:
             - secretRef:
                 name: api-secret
-      imagePullSecrets:
-        - name: ghcr-secret
           volumeMounts:
-          - name: tz-seoul
-            mountPath: /etc/localtime
+            - name: tz-seoul
+              mountPath: /etc/localtime
       volumes:
-      - name: tz-seoul
-        hostPath:
-          path: /usr/share/zoneinfo/Asia/Seoul
+        - name: tz-seoul
+          hostPath:
+            path: /usr/share/zoneinfo/Asia/Seoul
