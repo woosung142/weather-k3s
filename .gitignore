@@ -37,3 +37,5 @@ argo-cd/
 sealed-secret/
 
 secret/
+
+kube-prometheus-stack/

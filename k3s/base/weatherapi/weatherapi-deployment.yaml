@@ -22,3 +22,10 @@ spec:
                 name: api-secret
       imagePullSecrets:
         - name: ghcr-secret
+          volumeMounts:
+          - name: tz-seoul
+            mountPath: /etc/localtime
+      volumes:
+      - name: tz-seoul
+        hostPath:
+          path: /usr/share/zoneinfo/Asia/Seoul
