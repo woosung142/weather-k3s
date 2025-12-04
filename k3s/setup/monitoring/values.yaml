@@ -17,14 +17,15 @@ kube-state-metrics: #(0.49m / 24.0) cpu/memory
       memory: 50Mi
 
 alertmanager: #(0.23m / 19.8) cpu/memory
-  alertmanagerSpec:
-    resources:
-      requests:
-        cpu: 1m
-        memory: 20Mi
-      limits:
-        cpu: 3m
-        memory: 40Mi
+  enabled: false
+  #alertmanagerSpec:
+  #  resources:
+  #    requests:
+  #      cpu: 1m
+  #      memory: 20Mi
+  #    limits:
+  #      cpu: 3m
+  #      memory: 40Mi
 
 prometheus:
   prometheusSpec:
