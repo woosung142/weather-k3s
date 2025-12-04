@@ -3,31 +3,36 @@ controller:
   resources:
     requests:
       cpu: 10m
-      memory: 64Mi
+      memory: 250Mi
     limits:
+      cpu: 30m
       memory: 512Mi
 
 server:
   replicas: 1
-  service:
-    type: NodePort
-    nodePortHttp: 30080
-    nodePortHttps: 30443
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    hostname: "argocd.weapi.shop"
+    path: /
+    pathType: Prefix 
   resources:
     requests:
-      cpu: 10m
-      memory: 64Mi
+      cpu: 3m
+      memory: 40Mi
     limits:
-      memory: 512Mi
+      cpu: 9m
+      memory: 80Mi
 
-repoServer:
+repoServer: #메모리 피크 보여서 메모리 리밋 3배 줌
   replicas: 1
   resources:
     requests:
-      cpu: 10m
-      memory: 64Mi
+      cpu: 2m
+      memory: 40Mi
     limits:
-      memory: 512Mi
+      cpu: 6m
+      memory: 120Mi
 
 applicationSet:
   replicas: 0
@@ -35,10 +40,11 @@ applicationSet:
 redis:
   resources:
     requests:
-      cpu: 10m
-      memory: 64Mi
+      cpu: 6m
+      memory: 6Mi
     limits:
-      memory: 256Mi
+      cpu: 12m
+      memory: 12Mi
 dex:
   enabled: false  # SSO 비활성화
 notifications:
