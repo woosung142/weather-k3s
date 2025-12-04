@@ -10,6 +10,8 @@ controller:
 
 server:
   replicas: 1
+  extraArgs:
+    - --insecure
   ingress:
     enabled: true
     ingressClassName: traefik
