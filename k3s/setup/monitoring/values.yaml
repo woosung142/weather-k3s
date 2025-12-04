@@ -1,0 +1,76 @@
+prometheusOperator: #(1.48m / 32.3) cpu/memory
+  resources:
+    requests:
+      cpu: 2m
+      memory: 30Mi
+    limits:
+      cpu: 6m
+      memory: 64Mi
+
+kube-state-metrics: #(0.49m / 24.0) cpu/memory
+  resources:
+    requests:
+      cpu: 1m
+      memory: 25Mi
+    limits:
+      cpu: 3m
+      memory: 50Mi
+
+alertmanager: #(0.23m / 19.8) cpu/memory
+  enabled: false
+  #alertmanagerSpec:
+  #  resources:
+  #    requests:
+  #      cpu: 1m
+  #      memory: 20Mi
+  #    limits:
+  #      cpu: 3m
+  #      memory: 40Mi
+
+prometheus:
+  prometheusSpec:
+    scrapeInterval: "5m" # 스크랩 간격을 5분으로 설정 (서버 부하 방지)
+    retention: "5d" # 데이터 보존 기간을 5일로 설정 (기본값 15일)
+    resources: #(18.2m / 414) cpu/memory
+      requests:
+        cpu: 15m
+        memory: 360Mi
+      limits:
+        cpu: 60m
+        memory: 800Mi
+
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi # 저장 용량을 5Gi로 설정 (기본값 50Gi)
+
+grafana:
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    hosts:
+      - grafana.weapi.shop
+    path: /
+  defaultDashboardsTimezone: KST
+  adminPassword: "qwer1234!" # Grafana 관리자 비밀번호 설정
+
+  resources: # (3.30m / 141) cpu/memory -> 메모리 변경 폭이 큼
+    requests:
+      cpu: 10m  #수정
+      memory: 140Mi
+    limits:
+      cpu: 30m #수정
+      memory: 280Mi
+
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeEtcd:
+  enabled: false
