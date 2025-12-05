@@ -2,22 +2,34 @@ controller:
   replicas: 1
   resources:
     requests:
-      cpu: 10m
+      cpu: 100m #10m
       memory: 250Mi
     limits:
-      cpu: 30m
+      cpu: 300m #30m
       memory: 512Mi
 
 server:
   replicas: 1
   extraArgs:
-    - --insecure
+    - --insecure  # HTTPS 비활성화 1번
   ingress:
-    enabled: true
-    ingressClassName: traefik
-    hostname: "argocd.weapi.shop"
-    path: /
-    pathType: Prefix 
+    enabled: false
+#    ingressClassName: traefik
+#    hostname: "argocd.weapi.shop"
+#    tls: false
+
+#    extraPaths:
+#      - path: /
+#        pathType: Prefix
+#        backend:
+#          service:
+#            name: argocd-server
+#            port:
+#              number: 80
+#  service:
+#    annotations:
+#      annotations:
+#        traefik.ingress.kubernetes.io/service.serversscheme: http # HTTPS 비활성화 2번
   resources:
     requests:
       cpu: 3m
@@ -30,11 +42,11 @@ repoServer: #메모리 피크 보여서 메모리 리밋 3배 줌
   replicas: 1
   resources:
     requests:
-      cpu: 2m
-      memory: 40Mi
+      cpu: 50m #2m
+      memory: 40Mi #40Mi
     limits:
-      cpu: 6m
-      memory: 120Mi
+      cpu: 200m #6m
+      memory: 120Mi #120Mi
 
 applicationSet:
   replicas: 0
