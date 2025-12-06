@@ -14,7 +14,8 @@ K3s 경량 쿠버네티스 환경에서 운영되는 날씨 및 CCTV 정보 제�
 - **성능 최적화**: Redis 캐싱으로 API 응답 속도 극대화
 - **자동 배포**: GitOps 기반 ArgoCD로 선언적 배포 관리
 - **보안**: Sealed Secrets를 통한 민감정보 암호화 관리
- - **앱 프론트엔드**: Kotlin으로 개발된 모바일 앱 화면 제공
+- **모니터링**: Prometheus로 메트릭 수집 및 Grafana로 대시보드 시각화
+- **앱 프론트엔드**: Kotlin으로 개발된 모바일 앱 화면 제공
 
 ---
 
@@ -56,12 +57,12 @@ ITS 국가교통정보센터 API를 통한 고속도로 CCTV 정보 조회
 | 계층 | 기술 |
 |------|------|
 | **API Framework** | ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=FastAPI&logoColor=white) ![Uvicorn](https://img.shields.io/badge/Uvicorn-4B8BBE?style=flat-square&logo=Python&logoColor=white) |
-| **언어** | ![Python](https://img.shields.io/badge/Python%203.8+-3776AB?style=flat-square&logo=Python&logoColor=white) |
+| **언어** | ![Python](https://img.shields.io/badge/Python%203.10+-3776AB?style=flat-square&logo=Python&logoColor=white) |
 | **프론트엔드** | ![Kotlin](https://img.shields.io/badge/Kotlin-0095D5?style=flat-square&logo=kotlin&logoColor=white) |
 | **캐싱** | ![Redis](https://img.shields.io/badge/Redis%207.0-DC382D?style=flat-square&logo=Redis&logoColor=white) |
 | **컨테이너** | ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=Docker&logoColor=white) |
 | **오케스트레이션** | ![Kubernetes](https://img.shields.io/badge/K3s%2FKubernetes-326CE5?style=flat-square&logo=Kubernetes&logoColor=white) |
-| **GitOps** | ![ArgoCD](https://img.shields.io/badge/ArgoCD%202.8+-EF7B4D?style=flat-square&logo=ArgoCD&logoColor=white) |
+| **GitOps** | ![ArgoCD](https://img.shields.io/badge/ArgoCD%203.2+-EF7B4D?style=flat-square&logo=ArgoCD&logoColor=white) |
 | **IaC** | ![Helm](https://img.shields.io/badge/Helm-0F1689?style=flat-square&logo=Helm&logoColor=white) ![Kustomize](https://img.shields.io/badge/Kustomize-326CE5?style=flat-square&logo=Kubernetes&logoColor=white) |
 | **보안** | ![Sealed Secrets](https://img.shields.io/badge/Sealed%20Secrets-2496ED?style=flat-square&logo=Kubernetes&logoColor=white) |
 | **Ingress** | ![Traefik](https://img.shields.io/badge/Traefik-24A1C1?style=flat-square&logo=Traefik&logoColor=white) |
@@ -114,7 +115,7 @@ Host: www.weapi.shop
 ### GitOps 배포 (ArgoCD)
 ```
 Root Application (자동 동기화 & 자동 복구)
-├── ArgoCD (Argo CD 2.8+ 설치)
+├── ArgoCD (Argo CD 3.2+ 설치)
 ├── Sealed Secrets (암호화된 시크릿 관리)
 ├── Monitoring (Prometheus + Grafana)
 ├── Networking (Traefik, Cloudflare Tunnel)
