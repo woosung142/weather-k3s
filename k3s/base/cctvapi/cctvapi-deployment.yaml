@@ -15,6 +15,13 @@ spec:
       containers:
         - name: cctvapi
           image: ghcr.io/woosung142/weather-k3s/cctvapi:main
+          resources:
+            requests:
+              cpu: 3m
+              memory: 55Mi
+            limits:
+              cpu: 9m
+              memory: 110Mi
           ports:
             - containerPort: 8100
           envFrom:

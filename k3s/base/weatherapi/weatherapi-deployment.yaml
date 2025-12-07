@@ -17,6 +17,13 @@ spec:
       containers:
         - name: weatherapi
           image: ghcr.io/woosung142/weather-k3s/weatherapi:main
+          resources:
+            requests:
+              cpu: 5m
+              memory: 65Mi
+            limits:
+              cpu: 20m
+              memory: 130Mi
           ports:
             - containerPort: 8000
           envFrom:
